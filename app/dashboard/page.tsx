@@ -1,5 +1,7 @@
 'use client'
 
+export const dynamic = 'force-dynamic'
+
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
@@ -48,7 +50,9 @@ export default function DashboardPage() {
   const [uploadError, setUploadError] = useState('')
   const [loading, setLoading] = useState(true)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const dragCounter = useRef(0)
   const router = useRouter()
   const supabase = createClient()
 
@@ -67,14 +71,10 @@ export default function DashboardPage() {
     loadFiles()
   }, [loadFiles])
 
-  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-
+  async function uploadFile(file: File) {
     const MAX = 50 * 1024 * 1024
     if (file.size > MAX) {
       setUploadError(`"${file.name}" is too large. Maximum is 50 MB.`)
-      if (fileInputRef.current) fileInputRef.current.value = ''
       return
     }
 
@@ -95,7 +95,6 @@ export default function DashboardPage() {
       setUploadError(storageError.message)
       setUploading(false)
       setUploadProgress('')
-      if (fileInputRef.current) fileInputRef.current.value = ''
       return
     }
 
@@ -114,7 +113,43 @@ export default function DashboardPage() {
 
     setUploading(false)
     setUploadProgress('')
+  }
+
+  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    await uploadFile(file)
     if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  function handleDragEnter(e: React.DragEvent) {
+    e.preventDefault()
+    dragCounter.current++
+    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+      setIsDragging(true)
+    }
+  }
+
+  function handleDragLeave(e: React.DragEvent) {
+    e.preventDefault()
+    dragCounter.current--
+    if (dragCounter.current === 0) {
+      setIsDragging(false)
+    }
+  }
+
+  function handleDragOver(e: React.DragEvent) {
+    e.preventDefault()
+  }
+
+  async function handleDrop(e: React.DragEvent) {
+    e.preventDefault()
+    setIsDragging(false)
+    dragCounter.current = 0
+
+    const file = e.dataTransfer.files?.[0]
+    if (!file) return
+    await uploadFile(file)
   }
 
   async function handleDownload(file: FileRecord) {
@@ -153,7 +188,26 @@ export default function DashboardPage() {
   )
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div
+      className="min-h-screen flex flex-col"
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
+      {/* Drag overlay */}
+      {isDragging && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none"
+          style={{ background: 'rgba(37,99,235,0.10)', border: '3px dashed #2563eb' }}
+        >
+          <div className="text-center">
+            <p className="text-4xl mb-3">📂</p>
+            <p className="text-lg font-semibold text-blue-600">Drop to upload</p>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <header
         className="px-5 py-3 flex items-center justify-between"
